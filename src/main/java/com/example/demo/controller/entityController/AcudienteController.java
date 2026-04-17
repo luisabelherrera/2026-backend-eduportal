@@ -1,0 +1,63 @@
+package com.example.demo.controller.entityController;
+
+import com.example.demo.exceptions.customexceptions.exceptionsEntity.AcudienteNotFoundException;
+import com.example.demo.model.entity.dto.AcudienteDTO;
+import com.example.demo.services.service.AcudienteService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+@CrossOrigin
+@RestController
+@RequestMapping("/api/acudientes")
+public class AcudienteController {
+
+    @Autowired
+    private AcudienteService acudienteService;
+
+    @GetMapping("/acudientes")
+    public ResponseEntity<Page<AcudienteDTO>> getAcudientes(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) String nombres,
+            @RequestParam(required = false) String documentoIdentidad,
+            @RequestParam(required = false) String parentesco,
+            @RequestParam(required = false) String ciudad,
+            @RequestParam(required = false) Boolean activo) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<AcudienteDTO> acudientesPage = acudienteService.findByFilters(nombres, documentoIdentidad, parentesco, ciudad, activo, pageable);
+        return ResponseEntity.ok(acudientesPage);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AcudienteDTO> getAcudienteById(@PathVariable Integer id) {
+        Optional<AcudienteDTO> acudiente = acudienteService.findById(id);
+        return acudiente.map(ResponseEntity::ok)
+                .orElseThrow(() -> new AcudienteNotFoundException(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<AcudienteDTO> createAcudiente(@RequestBody AcudienteDTO acudienteDTO) {
+        AcudienteDTO nuevoAcudiente = acudienteService.save(acudienteDTO);
+        return ResponseEntity.ok(nuevoAcudiente);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<AcudienteDTO> updateAcudiente(@PathVariable long id,
+                                                        @RequestBody AcudienteDTO acudienteDetalles) {
+        acudienteDetalles.setIdAcudiente(id);
+        AcudienteDTO acudienteActualizado = acudienteService.save(acudienteDetalles);
+        return ResponseEntity.ok(acudienteActualizado);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteAcudiente(@PathVariable long id) {
+        acudienteService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+}

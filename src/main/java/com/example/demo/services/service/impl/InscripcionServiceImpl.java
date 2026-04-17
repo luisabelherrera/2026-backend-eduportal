@@ -1,0 +1,103 @@
+package com.example.demo.services.service.impl;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.demo.model.entity.Inscripcion;
+import com.example.demo.model.entity.NivelDetalle;
+import com.example.demo.repositories.jpa.InscripcionRepository;
+import com.example.demo.repositories.jpa.NivelDetalleRepository;
+import com.example.demo.services.service.InscripcionService;
+
+@Service
+public class InscripcionServiceImpl implements InscripcionService {
+
+    @Autowired
+    private InscripcionRepository inscripcionRepository;
+    @Autowired
+    private NivelDetalleRepository nivelDetalleRepository;
+
+    @Override
+    public List<Inscripcion> findAll() {
+        return inscripcionRepository.findAll();
+    }
+
+    @Override
+    public Optional<Inscripcion> findById(Integer id) {
+        return inscripcionRepository.findById(id);
+    }
+
+    @Override
+    @Transactional
+    public Inscripcion save(Inscripcion inscripcion) {
+        if (inscripcion.getAcudiente() == null) {
+            throw new IllegalArgumentException("El acudiente no puede ser nulo.");
+        }
+
+        Optional<Inscripcion> inscripcionExistente = inscripcionRepository.findById(inscripcion.getIdInscripcion());
+
+        if (inscripcionExistente.isPresent()) {
+            Inscripcion inscripcionAnterior = inscripcionExistente.get();
+            NivelDetalle nivelAnterior = inscripcionAnterior.getNivelDetalle();
+            NivelDetalle nivelNuevo = inscripcion.getNivelDetalle();
+
+            if (!nivelAnterior.equals(nivelNuevo)) {
+                if (nivelNuevo.getVacantesDisponibles() <= 0) {
+                    throw new IllegalStateException("No hay vacantes disponibles en el nuevo nivel.");
+                }
+
+                // Actualizar nivel anterior
+                nivelAnterior.setVacantesOcupadas(nivelAnterior.getVacantesOcupadas() - 1);
+                nivelAnterior.setVacantesDisponibles(nivelAnterior.getVacantesDisponibles() + 1);
+                nivelDetalleRepository.save(nivelAnterior);
+
+                // Actualizar nivel nuevo
+                nivelNuevo.setVacantesOcupadas(nivelNuevo.getVacantesOcupadas() + 1);
+                nivelNuevo.setVacantesDisponibles(nivelNuevo.getVacantesDisponibles() - 1);
+                nivelDetalleRepository.save(nivelNuevo);
+            }
+            // Si el nivel no cambia, no tocamos vacantes
+        } else {
+            NivelDetalle nivelDetalle = inscripcion.getNivelDetalle();
+
+            if (nivelDetalle.getVacantesDisponibles() <= 0) {
+                throw new IllegalStateException("No hay vacantes disponibles en este nivel.");
+            }
+
+            nivelDetalle.setVacantesOcupadas(nivelDetalle.getVacantesOcupadas() + 1);
+            nivelDetalle.setVacantesDisponibles(nivelDetalle.getVacantesDisponibles() - 1);
+            nivelDetalleRepository.save(nivelDetalle);
+        }
+
+        return inscripcionRepository.save(inscripcion);
+    }
+
+    @Override
+    @Transactional
+    public void deleteById(Integer id) {
+        Optional<Inscripcion> optionalInscripcion = inscripcionRepository.findById(id);
+
+        if (!optionalInscripcion.isPresent()) {
+            throw new IllegalStateException("La inscripción con el ID " + id + " no existe.");
+        }
+
+        Inscripcion inscripcion = optionalInscripcion.get();
+        NivelDetalle nivelDetalle = inscripcion.getNivelDetalle();
+
+        if (nivelDetalle.getVacantesOcupadas() <= 0) {
+            throw new IllegalStateException("No hay vacantes ocupadas para descontar en el nivel " + nivelDetalle.getIdNivelDetalle());
+        }
+
+        // Actualizar vacantes antes de eliminar
+        nivelDetalle.setVacantesOcupadas(nivelDetalle.getVacantesOcupadas() - 1);
+        nivelDetalle.setVacantesDisponibles(nivelDetalle.getVacantesDisponibles() + 1);
+        nivelDetalleRepository.save(nivelDetalle);
+
+        // Eliminar inscripción
+        inscripcionRepository.deleteById(id);
+    }
+}
